@@ -1,0 +1,64 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Proletario Parásito Podcast Parser",
+  "projectDescription": "A .NET 8 CLI tool that fetches, parses, and summarizes episode data from the Proletario y Parásito podcast RSS feed",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": "#1484fc",
+  "darkColor": "#82beef",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Architecture",
+        "pages": [
+          "architecture/overview",
+          "architecture/pipeline",
+          "architecture/parsing-logic"
+        ]
+      },
+      {
+        "group": "API Reference",
+        "pages": [
+          "api/models",
+          "api/services",
+          "api/rss-feed-service",
+          "api/episode-parser-service",
+          "api/console-output-service"
+        ]
+      },
+      {
+        "group": "Examples",
+        "pages": [
+          "examples/basic-usage",
+          "examples/title-patterns",
+          "examples/simpsons-references"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "RSS feed fetching and XML parsing",
+    "Episode title parsing with regex patterns",
+    "Guest name extraction from episode titles",
+    "Simpsons episode reference extraction",
+    "HTML tag stripping and entity decoding",
+    "iTunes duration conversion to seconds",
+    "Color-coded console output"
+  ],
+  "publicApiSurface": [
+    "RssFeedService.GetEpisodesAsync()",
+    "EpisodeParserService.ParseEpisode()",
+    "ConsoleOutputService.ShowSumary()",
+    "ConsoleOutputService.ShowError()",
+    "RssEpisodeItem",
+    "EpisodeParseResults"
+  ]
+}
