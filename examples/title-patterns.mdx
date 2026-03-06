@@ -1,0 +1,186 @@
+---
+title: Title Patterns
+description: Understanding how episode titles are parsed and structured
+icon: text
+---
+
+The parser handles multiple title formats using compiled regular expressions. This guide shows each pattern with real examples and explains the extraction logic.
+
+## Supported Title Patterns
+
+The parser recognizes three main title formats:
+
+<Accordion title="Pattern 1: Numbered Episode with Guest">
+  **Example:**
+  ```text
+  42 - El capitalismo (con Juan Garcia) | Proletario y Parásito
+  ```
+  
+  **Extracted Data:**
+  - Episode Number: `42`
+  - Cleaned Title: `El capitalismo`
+  - Guests: `["Juan Garcia"]`
+  
+  **Regex Pattern:**
+  ```csharp
+  @"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*\(con\s+(?<guests>.+?)\)\s*\|\s*Proletario y Parásito"
+  ```
+</Accordion>
+
+<Accordion title="Pattern 2: Numbered Episode without Guest">
+  **Example:**
+  ```text
+  42 - El capitalismo | Proletario y Parásito
+  ```
+  
+  **Extracted Data:**
+  - Episode Number: `42`
+  - Cleaned Title: `El capitalismo`
+  - Guests: `[]` (empty)
+  
+  **Regex Pattern:**
+  ```csharp
+  @"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*\|\s*Proletario y Parásito"
+  ```
+</Accordion>
+
+<Accordion title="Pattern 3: Special Episode with Number">
+  **Example:**
+  ```text
+  ESPECIAL #5 | Proletario y Parásito
+  ```
+  
+  **Extracted Data:**
+  - Episode Number: `5`
+  - Cleaned Title: `Especial #5`
+  - Is Special: `true`
+  
+  **Regex Pattern:**
+  ```csharp
+  @"^ESPECIAL\s*#(?<number>\d+)\s*\|\s*Proletario y Parásito"
+  ```
+</Accordion>
+
+## Guest Name Extraction
+
+The parser handles multiple guest names in two formats:
+
+### Comma-Separated Guests
+
+```text
+85 - Tema especial (con María López, Carlos Ruiz) | Proletario y Parásito
+```
+
+**Parsed guests:**
+```csharp
+["María López", "Carlos Ruiz"]
+```
+
+### "y"-Separated Guests
+
+```text
+90 - Colaboración (con Ana Torres y Pedro Sánchez) | Proletario y Parásito
+```
+
+**Parsed guests:**
+```csharp
+["Ana Torres", "Pedro Sánchez"]
+```
+
+### Combined Separators
+
+The parser can handle both separators in the same title:
+
+```text
+(con Juan García, María López y Carlos Ruiz)
+```
+
+**Parsed guests:**
+```csharp
+["Juan García", "María López", "Carlos Ruiz"]
+```
+
+<Info>
+Guest parsing logic from `EpisodeParserService.cs:102-113`:
+
+```csharp
+return guestsText
+    .Split(',')
+    .SelectMany(part => part.Split([" y "], StringSplitOptions.None))
+    .Select(name => name.Trim())
+    .Where(name => !string.IsNullOrEmpty(name))
+    .ToList();
+```
+</Info>
+
+## Special Episode Keywords
+
+Episodes are automatically flagged as special if their title contains any of these keywords (case-insensitive):
+
+<CardGroup cols={3}>
+  <Card title="cachitos" icon="video">
+    Short clips or segments
+  </Card>
+  <Card title="noticiario" icon="newspaper">
+    News-style episodes
+  </Card>
+  <Card title="especial" icon="star">
+    Special episodes
+  </Card>
+  <Card title="extra" icon="plus">
+    Bonus content
+  </Card>
+  <Card title="bonus" icon="gift">
+    Additional episodes
+  </Card>
+  <Card title="ESPECIAL #N" icon="hashtag">
+    Numbered specials
+  </Card>
+</CardGroup>
+
+**Implementation:**
+```csharp
+private static readonly string[] SpecialWords = 
+    ["cachitos", "noticiario", "especial", "extra", "bonus"];
+
+private static bool IsSpecialEpisode(string title)
+{
+    if (string.IsNullOrWhiteSpace(title))
+        return false;
+    return SpecialWords.Any(word => 
+        title.Contains(word, StringComparison.OrdinalIgnoreCase));
+}
+```
+
+## Parsing Priority
+
+The parser tries patterns in this order:
+
+<Steps>
+  <Step title="Special with Number">
+    First checks for `ESPECIAL #N` format
+  </Step>
+  <Step title="With Guest">
+    Then checks for `(con Guest)` pattern
+  </Step>
+  <Step title="Without Guest">
+    Then checks for standard numbered episode
+  </Step>
+  <Step title="Fallback">
+    Strips the podcast suffix and flags as special
+  </Step>
+</Steps>
+
+<Note>
+All regex patterns are compiled with `RegexOptions.Compiled | RegexOptions.IgnoreCase` for performance and case-insensitive matching.
+</Note>
+
+## Podcast Suffix Removal
+
+All patterns remove the podcast branding suffix:
+
+```csharp
+private const string PodcastSuffix = @"\|\s*Proletario y Parásito";
+```
+
+This ensures the `CleanedTitle` property contains only the episode's content title without the podcast name.

@@ -1,0 +1,115 @@
+---
+title: Basic Usage
+description: Complete walkthrough of fetching and parsing podcast episodes
+icon: play
+---
+
+This guide demonstrates a complete usage example from cloning the repository to viewing parsed results.
+
+## Quick Start
+
+Clone the repository and run the parser:
+
+<CodeGroup>
+```bash Clone and Run
+git clone https://github.com/xabierfj/ProletarioParasitoPodcastParser.git
+cd ProletarioParasitoPodcastParser
+dotnet run
+```
+</CodeGroup>
+
+<Note>
+Make sure you have [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8) installed and internet access to reach the RSS feed endpoint.
+</Note>
+
+## Expected Output
+
+When you run the parser, you'll see color-coded console output:
+
+```text
+[INFO] Fetching RSS feed from https://anchor.fm/s/fae337f8/podcast/rss
+[INFO] Fetched 142 RSS feeds
+
+=== PARSE RESULTS SUMMARY ===
+
+    Total Episodes: 142
+    With Guests: 38
+    Special Episodes: 21
+```
+
+<Info>
+The counts will vary depending on the current state of the feed. The numbers above are examples from a specific point in time.
+</Info>
+
+## Understanding the Output
+
+The parser displays three key statistics:
+
+### Total Episodes
+The complete count of all episodes found in the RSS feed, including regular episodes, special episodes, and bonus content.
+
+### With Guests
+Episodes that contain guest information in the title format. The parser extracts guest names from patterns like:
+- `42 - El capitalismo (con Juan Garcia) | Proletario y Parásito`
+
+Guests are shown in **yellow** in the console output.
+
+### Special Episodes
+Episodes flagged as special content, including:
+- Episodes with the `ESPECIAL #` format
+- Episodes containing keywords: `cachitos`, `noticiario`, `especial`, `extra`, or `bonus`
+
+Special episodes are shown in **magenta** in the console output.
+
+## Application Flow
+
+The parser follows a simple linear pipeline:
+
+<Steps>
+  <Step title="Fetch RSS Feed">
+    The `RssFeedService` downloads the RSS XML from the podcast feed endpoint using `HttpClient`.
+  </Step>
+  
+  <Step title="Parse Episodes">
+    The `EpisodeParserService` applies regex patterns to extract structured data from each episode title and description.
+  </Step>
+  
+  <Step title="Display Results">
+    The `ConsoleOutputService` formats and renders the summary with color-coded statistics.
+  </Step>
+</Steps>
+
+## Error Handling
+
+If the parser encounters an error (e.g., network issues, invalid feed format), it will display an error message in red:
+
+```text
+[ERROR] Unable to connect to the RSS feed
+```
+
+Common error scenarios:
+- **Network connectivity issues**: Ensure you have internet access
+- **Invalid RSS format**: The feed structure may have changed
+- **HTTP errors**: The feed endpoint may be temporarily unavailable
+
+<Note>
+The application uses UTF-8 encoding to properly handle Spanish characters and special symbols in episode titles and descriptions.
+</Note>
+
+## What Happens Under the Hood
+
+The `Program.cs` file orchestrates the entire process:
+
+```csharp
+var rssEpisodes = await rssFeedService.GetEpisodesAsync();
+var allParsed = rssEpisodes.Select(e => parserService.ParseEpisode(e)).ToList();
+outputService.ShowSumary(allParsed);
+```
+
+Each RSS episode item is transformed into an `EpisodeParseResults` object containing:
+- Episode number
+- Cleaned title
+- Guest names (if any)
+- Special episode flag
+- Simpsons episode reference (if present)
+- Publication date, duration, and media URLs

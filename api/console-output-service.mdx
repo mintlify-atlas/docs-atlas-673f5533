@@ -1,0 +1,259 @@
+---
+title: 'ConsoleOutputService'
+description: 'Service for displaying formatted console output with colored text'
+---
+
+## Overview
+
+The `ConsoleOutputService` handles all console output for the parser, providing formatted summaries and error messages with color-coded text for better readability.
+
+### Location
+
+`ProletarioParasitoPodcastParser.Services.ConsoleOutputService`
+
+---
+
+## Public Methods
+
+### ShowSumary()
+
+<Note>
+  Note: The method name contains a typo - it's spelled "Sumary" instead of "Summary" in the source code.
+</Note>
+
+Displays a formatted summary of parsed episodes with statistics.
+
+```csharp
+public void ShowSumary(List<EpisodeParseResults> episodes)
+```
+
+<ParamField path="episodes" type="List<EpisodeParseResults>" required>
+  List of parsed episodes to summarize.
+</ParamField>
+
+#### Display Format
+
+Shows the following statistics:
+
+- **Total Episodes** - Total count of all episodes
+- **With Guests** - Count of episodes that have guest information (in yellow)
+- **Special Episodes** - Count of special episodes (in magenta)
+
+#### Implementation
+
+```csharp
+if (episodes.Count == 0)
+{
+     WriteColoured("No episodes found.", ConsoleColor.DarkYellow); 
+     return;
+}
+
+var withGuests = episodes.Count(e => e.Guests.Any());
+var specials = episodes.Count(e => e.IsSpecial);
+
+Console.WriteLine("=== PARSE RESULTS SUMMARY ===");
+Console.WriteLine();
+Console.WriteLine($"\tTotal Episodes: {episodes.Count}");
+WriteColoured($"\tWith Guests: {withGuests}", ConsoleColor.Yellow);
+WriteColoured($"\tSpecial Episodes: {specials}", ConsoleColor.Magenta);
+Console.WriteLine();
+```
+
+#### Color Scheme
+
+- **Dark Yellow** - Warning when no episodes found
+- **Yellow** - Episodes with guests count
+- **Magenta** - Special episodes count
+- **White** (default) - Total episodes and section headers
+
+#### Example Output
+
+```
+=== PARSE RESULTS SUMMARY ===
+
+	Total Episodes: 127
+	With Guests: 45        (in yellow)
+	Special Episodes: 12   (in magenta)
+
+```
+
+#### Example Usage
+
+```csharp
+var outputService = new ConsoleOutputService();
+var episodes = new List<EpisodeParseResults>
+{
+    new EpisodeParseResults { EpisodeNumber = 1, Guests = new List<string> { "John Doe" } },
+    new EpisodeParseResults { EpisodeNumber = 2, IsSpecial = true },
+    new EpisodeParseResults { EpisodeNumber = 3 }
+};
+
+outputService.ShowSumary(episodes);
+```
+
+---
+
+### ShowError()
+
+Displays formatted error messages with stack traces in red.
+
+```csharp
+public void ShowError(Exception ex)
+```
+
+<ParamField path="ex" type="Exception" required>
+  The exception to display, including message and stack trace.
+</ParamField>
+
+#### Display Format
+
+Shows:
+
+1. Error message prefixed with `[ERROR]`
+2. Full stack trace (if available)
+
+All output is displayed in red color.
+
+#### Implementation
+
+```csharp
+WriteColoured($"[ERROR] {ex.Message}", ConsoleColor.Red);
+WriteColoured(ex.StackTrace ?? string.Empty, ConsoleColor.Red);
+```
+
+#### Example Output
+
+```
+[ERROR] Network timeout occurred                    (in red)
+   at RssFeedService.GetEpisodesAsync() in ...      (in red)
+   at Program.Main() in ...                         (in red)
+```
+
+#### Example Usage
+
+```csharp
+var outputService = new ConsoleOutputService();
+
+try
+{
+    await rssFeedService.GetEpisodesAsync();
+}
+catch (Exception ex)
+{
+    outputService.ShowError(ex);
+}
+```
+
+---
+
+## Private Helper Methods
+
+### WriteColoured()
+
+Writes text to the console in a specified color.
+
+```csharp
+private static void WriteColoured(string text, ConsoleColor color)
+```
+
+<ParamField path="text" type="string" required>
+  The text to write to the console.
+</ParamField>
+
+<ParamField path="color" type="ConsoleColor" required>
+  The console color to use for the text.
+</ParamField>
+
+#### Implementation
+
+```csharp
+Console.ForegroundColor = color;
+Console.WriteLine(text);
+Console.ResetColor();
+```
+
+#### Process
+
+1. Sets the console foreground color
+2. Writes the text with a newline
+3. Resets the color back to default
+
+<Note>
+  The method always resets the color after writing to prevent color bleeding to subsequent output.
+</Note>
+
+---
+
+## ConsoleColor Values
+
+The service uses the following colors from the `System.ConsoleColor` enum:
+
+| Color | Usage |
+|-------|-------|
+| `ConsoleColor.DarkYellow` | Warning for no episodes found |
+| `ConsoleColor.Yellow` | Episodes with guests statistics |
+| `ConsoleColor.Magenta` | Special episodes statistics |
+| `ConsoleColor.Red` | Error messages and stack traces |
+
+---
+
+## Dependencies
+
+```csharp
+using ProletarioParasitoPodcastParser.Models;
+```
+
+- Requires `EpisodeParseResults` model for summary method
+- Uses built-in `System.Console` and `System.ConsoleColor`
+
+---
+
+## Design Patterns
+
+### Separation of Concerns
+
+The service encapsulates all console output logic, making it easy to:
+
+- Swap for different output methods (file, logging service, etc.)
+- Test application logic without actual console output
+- Maintain consistent formatting across the application
+
+### Single Responsibility
+
+Each public method has a single, clear purpose:
+
+- `ShowSumary()` - Display episode statistics
+- `ShowError()` - Display error information
+
+---
+
+## Usage Example
+
+Complete example showing typical usage:
+
+```csharp
+using ProletarioParasitoPodcastParser.Services;
+
+var httpClient = new HttpClient();
+var rssFeedService = new RssFeedService(httpClient);
+var parserService = new EpisodeParserService();
+var outputService = new ConsoleOutputService();
+
+try
+{
+    // Fetch episodes
+    var rssEpisodes = await rssFeedService.GetEpisodesAsync();
+    
+    // Parse episodes
+    var parsedEpisodes = rssEpisodes
+        .Select(e => parserService.ParseEpisode(e))
+        .ToList();
+    
+    // Display summary
+    outputService.ShowSumary(parsedEpisodes);
+}
+catch (Exception ex)
+{
+    outputService.ShowError(ex);
+}
+```

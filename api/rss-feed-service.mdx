@@ -1,0 +1,246 @@
+---
+title: 'RssFeedService'
+description: 'Service for fetching and parsing the podcast RSS feed'
+---
+
+## Overview
+
+The `RssFeedService` is responsible for fetching the podcast's RSS feed from Anchor.fm and parsing it into structured `RssEpisodeItem` objects. It handles XML parsing, iTunes namespace elements, duration conversion, and HTML cleaning.
+
+### Location
+
+`ProletarioParasitoPodcastParser.Services.RssFeedService`
+
+---
+
+## Constructor
+
+The service uses C# 12 primary constructor syntax:
+
+```csharp
+public class RssFeedService(HttpClient httpClient)
+```
+
+<ParamField path="httpClient" type="HttpClient" required>
+  An HttpClient instance for making HTTP requests to the RSS feed endpoint.
+</ParamField>
+
+### RSS Feed URL
+
+The service uses a hardcoded RSS feed URL:
+
+```csharp
+private readonly string _rssFeedUrl = "https://anchor.fm/s/fae337f8/podcast/rss";
+```
+
+---
+
+## Public Methods
+
+### GetEpisodesAsync()
+
+Asynchronously fetches and parses all episodes from the RSS feed.
+
+```csharp
+public async Task<List<RssEpisodeItem>> GetEpisodesAsync()
+```
+
+<ResponseField name="Return Value" type="Task<List<RssEpisodeItem>>">
+  A task that resolves to a list of all episodes in the RSS feed.
+</ResponseField>
+
+#### Process Flow
+
+1. Logs the RSS feed URL being fetched
+2. Downloads the XML content via HTTP GET
+3. Parses the XML document
+4. Defines the iTunes XML namespace
+5. Iterates through all `<item>` elements
+6. Extracts data from XML elements and attributes
+7. Converts duration to seconds using `ConvertToSeconds()`
+8. Cleans HTML from description using `CleanHtml()`
+9. Returns the list of parsed episodes
+
+#### XML Namespace Handling
+
+The service handles the iTunes namespace for podcast-specific elements:
+
+```csharp
+XNamespace itunesNs = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+```
+
+This namespace is used to access:
+- `itunes:duration` - Episode duration
+- `itunes:image` - Episode image URL
+
+#### Episode Data Extraction
+
+```csharp
+var episode = new RssEpisodeItem
+{
+    Title = item.Element("title")?.Value ?? string.Empty,
+    DescriptionHtml = item.Element("description")?.Value ?? string.Empty,
+    DescriptionText = CleanHtml(item.Element("description")?.Value ?? string.Empty),
+    SpotifyUrl = item.Element("link")?.Value ?? string.Empty,
+    Guid = item.Element("guid")?.Value ?? string.Empty,
+    PublicationDate = DateTime.TryParse(item.Element("pubDate")?.Value, out var pubDate) ? pubDate : DateTime.MinValue,
+    AudioUrl = item.Element("enclosure")?.Attribute("url")?.Value ?? string.Empty,
+    AudioSizeBytes = long.Parse(item.Element("enclosure")?.Attribute("length")?.Value ?? "0"),
+    Duration = item.Element(itunesNs + "duration")?.Value ?? string.Empty,
+    ImageUrl = item.Element(itunesNs + "image")?.Attribute("href")?.Value ?? string.Empty
+};
+episode.DurationInSeconds = ConvertToSeconds(episode.Duration);
+```
+
+#### Error Handling
+
+Throws exceptions if the RSS feed fetch or parsing fails:
+
+```csharp
+catch (Exception ex)
+{
+    Console.WriteLine($"[ERROR] fetching RSS feed: {ex.Message}");
+    throw;
+}
+```
+
+#### Example Usage
+
+```csharp
+var httpClient = new HttpClient();
+var service = new RssFeedService(httpClient);
+
+try
+{
+    List<RssEpisodeItem> episodes = await service.GetEpisodesAsync();
+    Console.WriteLine($"Fetched {episodes.Count} episodes");
+    
+    foreach (var episode in episodes)
+    {
+        Console.WriteLine($"{episode.Title} - {episode.DurationInSeconds}s");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Failed to fetch episodes: {ex.Message}");
+}
+```
+
+---
+
+## Private Helper Methods
+
+### ConvertToSeconds()
+
+Converts various duration formats to total seconds.
+
+```csharp
+private int ConvertToSeconds(string episodeDuration)
+```
+
+<ParamField path="episodeDuration" type="string" required>
+  Duration string in format HH:MM:SS, MM:SS, or plain seconds (e.g., "90").
+</ParamField>
+
+<ResponseField name="Return Value" type="int">
+  Total duration in seconds, or 0 if parsing fails.
+</ResponseField>
+
+#### Supported Formats
+
+1. **TimeSpan format**: `"01:23:45"`, `"23:45"`, `"1:23:45"`
+2. **Plain seconds**: `"3600"`, `"90"`
+
+#### Implementation
+
+```csharp
+if (string.IsNullOrEmpty(episodeDuration))
+    return 0;
+
+if (TimeSpan.TryParse(episodeDuration.Trim(), out var timeSpan))
+    return (int)timeSpan.TotalSeconds;
+
+// Fallback: single plain-seconds value (e.g. "90")
+if (int.TryParse(episodeDuration.Trim(), out var seconds) && seconds >= 0)
+    return seconds;
+
+Console.WriteLine($"[ERROR] ConvertToSeconds: Could not parse duration '{episodeDuration}'");
+return 0; // Default to 0 if parsing fails
+```
+
+<Note>
+  The method first attempts to parse as TimeSpan, then falls back to parsing as plain integer seconds.
+</Note>
+
+---
+
+### CleanHtml()
+
+Removes HTML tags and decodes HTML entities from text.
+
+```csharp
+private string CleanHtml(string? html)
+```
+
+<ParamField path="html" type="string?" required>
+  HTML string that may contain tags, CDATA sections, and HTML entities.
+</ParamField>
+
+<ResponseField name="Return Value" type="string">
+  Plain text with HTML removed and entities decoded, or empty string if input is null/empty.
+</ResponseField>
+
+#### Process Flow
+
+1. Returns empty string if input is null or empty
+2. Removes CDATA tags: `<![CDATA[` and `]]>`
+3. Removes all HTML tags using regex: `<.*?>`
+4. Decodes HTML entities (e.g., `&amp;` → `&`)
+5. Normalizes whitespace (multiple spaces to single space)
+6. Trims leading and trailing whitespace
+
+#### Implementation
+
+```csharp
+if (string.IsNullOrEmpty(html))
+    return string.Empty;
+
+html = html.Replace("<![CDATA[", "").Replace("]]>", ""); // Remove CDATA tags if present;
+var cleanedText = Regex.Replace(html, "<.*?>", string.Empty);
+cleanedText = System.Net.WebUtility.HtmlDecode(cleanedText);
+cleanedText = Regex.Replace(cleanedText, @"\s+", " ").Trim();
+return cleanedText;
+```
+
+#### Example
+
+```csharp
+string html = "<![CDATA[<p>Hablamos sobre <strong>IA</strong> &amp; tecnología.</p>]]>";
+string clean = CleanHtml(html);
+// Result: "Hablamos sobre IA & tecnología."
+```
+
+---
+
+## Dependencies
+
+```csharp
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using ProletarioParasitoPodcastParser.Models;
+```
+
+- **System.Xml.Linq**: For XML parsing with LINQ to XML
+- **System.Text.RegularExpressions**: For HTML tag removal
+- **System.Net.WebUtility**: For HTML entity decoding (used via full namespace)
+
+---
+
+## Console Output
+
+The service logs informational messages during operation:
+
+- `[INFO] Fetching RSS feed from {url}` - When starting to fetch
+- `[INFO] Fetched {count} RSS feeds` - After successful parsing
+- `[ERROR] fetching RSS feed: {message}` - On failure
+- `[ERROR] ConvertToSeconds: Could not parse duration '{duration}'` - On duration parse failure

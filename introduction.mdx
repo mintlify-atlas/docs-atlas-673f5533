@@ -1,0 +1,99 @@
+---
+title: Introduction
+description: Learn about the Proletario Parásito Podcast Parser and what it can do
+---
+
+<Warning>
+  **Disclaimer:** This is an unofficial, fan-made project. The author is not affiliated with, endorsed by, or an official member of the *Proletario y Parásito* podcast or its creators. All podcast content and branding belong to their respective owners.
+</Warning>
+
+## What is Proletario Parásito Podcast Parser?
+
+Proletario Parásito Podcast Parser is a .NET 8 console application that fetches, parses, and summarizes episode data from the [Proletario y Parásito](https://bsky.app/profile/did:plc:libeenmaoi6p455baualxw36) podcast RSS feed.
+
+This tool retrieves the podcast's RSS feed, extracts structured metadata from each episode, and outputs a summary to the console. It handles a variety of title formats including numbered episodes, episodes with guests, and special entries.
+
+## What Problem Does It Solve?
+
+Podcast RSS feeds contain rich metadata, but it's often buried in XML format with inconsistent title structures and HTML-encoded descriptions. This parser:
+
+- **Standardizes episode data** by extracting structured information from variable title formats
+- **Identifies guest appearances** automatically, even with complex name lists
+- **Extracts Simpsons references** embedded in episode descriptions
+- **Provides clean, readable output** with color-coded console summaries
+- **Analyzes the entire feed** to provide statistics across all episodes
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="RSS Feed Parsing" icon="rss">
+    Fetches and parses the live RSS feed over HTTP with full XML deserialization
+  </Card>
+  
+  <Card title="Smart Title Parsing" icon="text">
+    Uses compiled regular expressions to extract episode numbers, titles, and guest names from various formats
+  </Card>
+  
+  <Card title="Guest Extraction" icon="users">
+    Identifies and parses guest names, including comma-separated and "y"-separated lists
+  </Card>
+  
+  <Card title="Special Episodes" icon="star">
+    Automatically flags special episodes, extras, and bonus content
+  </Card>
+  
+  <Card title="Simpsons References" icon="tv">
+    Extracts referenced Simpsons episode metadata (season, episode number, title) from descriptions
+  </Card>
+  
+  <Card title="HTML Cleaning" icon="broom">
+    Strips HTML tags and decodes HTML entities from episode descriptions
+  </Card>
+  
+  <Card title="Duration Conversion" icon="clock">
+    Converts iTunes duration strings to total seconds for easy processing
+  </Card>
+  
+  <Card title="Console Output" icon="terminal">
+    Renders color-coded summaries with detailed episode statistics
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+The parser is built with modern .NET technologies and follows clean architecture principles:
+
+- **Language:** C# 12 with nullable reference types enabled
+- **Framework:** .NET 8 (latest LTS version)
+- **XML Parsing:** `System.Xml.Linq` (XDocument)
+- **Pattern Matching:** `System.Text.RegularExpressions` (compiled `Regex` for performance)
+- **HTTP Client:** `System.Net.Http.HttpClient`
+- **Zero External Dependencies:** Uses only .NET 8 standard library
+
+## Architecture Overview
+
+The application follows a simple, linear pipeline with clear separation of concerns:
+
+```
+RSS Feed (HTTP) → RssFeedService → EpisodeParserService → ConsoleOutputService
+```
+
+| Component | Responsibility |
+|-----------|----------------|
+| `RssFeedService` | Downloads and deserializes RSS XML into `RssEpisodeItem` objects |
+| `EpisodeParserService` | Applies regex-based title parsing and description extraction |
+| `ConsoleOutputService` | Formats and renders the summary with console colors |
+| `EpisodeParseResults` | Holds all structured episode data, including computed properties |
+| `RssEpisodeItem` | Holds raw field values mapped directly from the RSS item element |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the .NET 8 SDK and set up the parser
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes with a complete example
+  </Card>
+</CardGroup>

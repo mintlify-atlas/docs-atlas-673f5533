@@ -1,0 +1,253 @@
+---
+title: 'Data Models'
+description: 'Core data models used throughout the Proletario Parásito Podcast Parser'
+---
+
+## Overview
+
+The parser uses two primary data models to represent podcast episodes at different stages of processing:
+
+- **RssEpisodeItem** - Raw data parsed directly from the RSS feed XML
+- **EpisodeParseResults** - Processed episode data with extracted metadata and computed properties
+
+---
+
+## RssEpisodeItem
+
+Represents the raw data structure for a single episode as parsed from the RSS feed.
+
+### Location
+
+`ProletarioParasitoPodcastParser.Models.RssEpisodeItem`
+
+### Properties
+
+<ParamField path="Title" type="string" required>
+  The raw episode title as it appears in the RSS feed. Typically includes episode number, title, guests, and podcast name.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="DescriptionHtml" type="string">
+  The original HTML description from the RSS feed, including CDATA tags and HTML markup.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="DescriptionText" type="string">
+  Plain text version of the description with HTML tags stripped and entities decoded.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="SpotifyUrl" type="string">
+  URL to the episode on Spotify. Retrieved from the `<link>` element in RSS.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="Guid" type="string">
+  Unique identifier for the episode from the RSS feed's `<guid>` element.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="PublicationDate" type="DateTime" required>
+  The date and time when the episode was published.
+</ParamField>
+
+<ParamField path="AudioUrl" type="string">
+  Direct URL to the audio file. Retrieved from the `<enclosure>` element's `url` attribute.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="AudioSizeBytes" type="long">
+  Size of the audio file in bytes. Retrieved from the `<enclosure>` element's `length` attribute.
+  
+  Default: `0`
+</ParamField>
+
+<ParamField path="Duration" type="string">
+  Duration in string format from the iTunes namespace (`itunes:duration`). Can be in format HH:MM:SS or plain seconds.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="DurationInSeconds" type="int">
+  Duration converted to total seconds. Computed by the RssFeedService.
+  
+  Default: `0`
+</ParamField>
+
+<ParamField path="ImageUrl" type="string">
+  URL to the episode's cover image. Retrieved from the iTunes namespace (`itunes:image` href attribute).
+  
+  Default: `string.Empty`
+</ParamField>
+
+### Example Usage
+
+```csharp
+var episode = new RssEpisodeItem
+{
+    Title = "42 - La Inteligencia Artificial (con Juan Perez) | Proletario y Parásito",
+    DescriptionText = "Hablamos sobre IA y sus implicaciones...",
+    PublicationDate = DateTime.Parse("2024-03-15"),
+    DurationInSeconds = 3600,
+    SpotifyUrl = "https://open.spotify.com/episode/abc123"
+};
+```
+
+---
+
+## EpisodeParseResults
+
+Represents the processed and structured episode data after parsing the raw RSS information. Includes extracted metadata such as episode numbers, guest names, and Simpsons episode references.
+
+### Location
+
+`ProletarioParasitoPodcastParser.Models.EpisodeParseResults`
+
+### Episode Identification
+
+<ParamField path="EpisodeNumber" type="int?">
+  The numeric episode number extracted from the title. Null for special episodes without numbers.
+</ParamField>
+
+<ParamField path="FormatedEpisodeNumber" type="string" computed>
+  **Computed Property** - Returns formatted episode number as `#42` or `"ESPECIAL"` for episodes without numbers.
+  
+  ```csharp
+  public string FormatedEpisodeNumber => EpisodeNumber.HasValue ? $"#{EpisodeNumber.Value}" : "ESPECIAL";
+  ```
+</ParamField>
+
+<ParamField path="IsSpecial" type="bool">
+  Indicates whether this is a special episode (not part of the regular numbering sequence).
+  
+  Default: `false`
+</ParamField>
+
+### Title and Content
+
+<ParamField path="OriginalTitle" type="string">
+  The original, unprocessed title from the RSS feed.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="CleanedTitle" type="string">
+  Processed title with episode number, guest information, and podcast name removed.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="Description" type="string">
+  Plain text description of the episode.
+  
+  Default: `string.Empty`
+</ParamField>
+
+### Guest Information
+
+<ParamField path="Guests" type="List<string>">
+  List of guest names extracted from the title. Handles comma separation and "y" (and) conjunctions.
+  
+  Default: `new List<string>()`
+</ParamField>
+
+### Simpsons Reference Data
+
+<ParamField path="SimpsonsSeason" type="int?">
+  The Simpsons season number if referenced in the episode description.
+</ParamField>
+
+<ParamField path="SimpsonsEpisode" type="int?">
+  The Simpsons episode number if referenced in the episode description.
+</ParamField>
+
+<ParamField path="SimpsonsEpisodeTitle" type="string">
+  The title of the referenced Simpsons episode.
+  
+  Default: `string.Empty`
+</ParamField>
+
+### Metadata
+
+<ParamField path="PublicationDate" type="DateTime" required>
+  The date and time when the episode was published.
+</ParamField>
+
+<ParamField path="DurationSeconds" type="int">
+  Episode duration in total seconds.
+  
+  Default: `0`
+</ParamField>
+
+<ParamField path="FormattedDuration" type="string" computed>
+  **Computed Property** - Returns duration formatted as HH:MM:SS.
+  
+  ```csharp
+  public string FormattedDuration => TimeSpan.FromSeconds(DurationSeconds).ToString(@"hh\:mm\:ss");
+  ```
+</ParamField>
+
+### Media URLs
+
+<ParamField path="SpotifyUrl" type="string">
+  URL to listen to the episode on Spotify.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="AudioUrl" type="string">
+  Direct URL to the audio file.
+  
+  Default: `string.Empty`
+</ParamField>
+
+<ParamField path="ImageUrl" type="string">
+  URL to the episode's cover image.
+  
+  Default: `string.Empty`
+</ParamField>
+
+### Example Usage
+
+```csharp
+var result = new EpisodeParseResults
+{
+    EpisodeNumber = 42,
+    CleanedTitle = "La Inteligencia Artificial",
+    Guests = new List<string> { "Juan Perez", "Maria Lopez" },
+    IsSpecial = false,
+    DurationSeconds = 3600,
+    SimpsonsSeason = 5,
+    SimpsonsEpisode = 12,
+    SimpsonsEpisodeTitle = "Bart Gets Famous"
+};
+
+Console.WriteLine(result.FormatedEpisodeNumber);  // "#42"
+Console.WriteLine(result.FormattedDuration);       // "01:00:00"
+```
+
+---
+
+## Relationship Between Models
+
+The typical data flow is:
+
+1. **RssFeedService** fetches RSS feed and creates `RssEpisodeItem` objects
+2. **EpisodeParserService** processes each `RssEpisodeItem` and returns `EpisodeParseResults`
+3. Application logic uses the structured `EpisodeParseResults` for further processing
+
+```csharp
+// Fetch raw episodes from RSS
+List<RssEpisodeItem> rssItems = await rssFeedService.GetEpisodesAsync();
+
+// Parse each episode
+List<EpisodeParseResults> parsedEpisodes = rssItems
+    .Select(rssItem => episodeParserService.ParseEpisode(rssItem))
+    .ToList();
+```

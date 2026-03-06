@@ -1,0 +1,449 @@
+---
+title: 'EpisodeParserService'
+description: 'Service for extracting structured metadata from episode titles and descriptions'
+---
+
+## Overview
+
+The `EpisodeParserService` processes raw RSS episode data and extracts structured information using regex patterns. It parses episode numbers, titles, guest names, and Simpsons episode references from episode titles and descriptions.
+
+### Location
+
+`ProletarioParasitoPodcastParser.Services.EpisodeParserService`
+
+---
+
+## Public Methods
+
+### ParseEpisode()
+
+Parses a raw RSS episode item and returns structured results.
+
+```csharp
+public EpisodeParseResults ParseEpisode(RssEpisodeItem rssItem)
+```
+
+<ParamField path="rssItem" type="RssEpisodeItem" required>
+  The raw episode data from the RSS feed to be parsed.
+</ParamField>
+
+<ResponseField name="Return Value" type="EpisodeParseResults">
+  Structured episode data with extracted metadata including episode number, cleaned title, guests, and Simpsons references.
+</ResponseField>
+
+#### Process Flow
+
+1. Creates new `EpisodeParseResults` with basic fields from RSS item
+2. Calls `ParseTitle()` to extract episode number, title, and guests
+3. Checks if episode is special using `IsSpecialEpisode()`
+4. Calls `ParseDescription()` to extract Simpsons episode references
+5. Returns the completed results
+
+#### Implementation
+
+```csharp
+var result = new EpisodeParseResults
+{
+    OriginalTitle = rssItem.Title,
+    Description = rssItem.DescriptionText,
+    PublicationDate = rssItem.PublicationDate,
+    DurationSeconds = rssItem.DurationInSeconds,
+    SpotifyUrl = rssItem.SpotifyUrl,
+    AudioUrl = rssItem.AudioUrl,
+    ImageUrl = rssItem.ImageUrl
+};
+
+ParseTitle(rssItem.Title, result);
+result.IsSpecial = result.IsSpecial || IsSpecialEpisode(rssItem.Title);
+ParseDescription(rssItem.DescriptionText, result);
+return result;
+```
+
+#### Example Usage
+
+```csharp
+var parserService = new EpisodeParserService();
+var rssItem = new RssEpisodeItem
+{
+    Title = "42 - La Inteligencia Artificial (con Juan Perez) | Proletario y Parásito",
+    DescriptionText = "Discutimos IA. [Episodio referencia: 5x12 - Bart Gets Famous]",
+    DurationInSeconds = 3600
+};
+
+var result = parserService.ParseEpisode(rssItem);
+// result.EpisodeNumber = 42
+// result.CleanedTitle = "La Inteligencia Artificial"
+// result.Guests = ["Juan Perez"]
+// result.SimpsonsSeason = 5
+// result.SimpsonsEpisode = 12
+```
+
+---
+
+## Regex Patterns
+
+The service uses several compiled regex patterns for parsing:
+
+### Podcast Suffix Pattern
+
+```csharp
+private const string PodcastSuffix = @"\|\s*Proletario y Parásito";
+```
+
+Matches the podcast name suffix that appears in all episode titles.
+
+---
+
+### TitleWithGuestRegex
+
+Matches episode titles that include guest information.
+
+```csharp
+private static readonly Regex TitleWithGuestRegex = new(
+    @$"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*\(con\s+(?<guests>.+?)\)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase
+);
+```
+
+#### Captures
+
+- `number` - Episode number (digits)
+- `title` - Episode title text
+- `guests` - Guest names inside parentheses after "con"
+
+#### Example Matches
+
+- ✅ `"42 - La Inteligencia Artificial (con Juan Perez) | Proletario y Parásito"`
+- ✅ `"15 - Tecnología (con Ana Lopez y Carlos Ruiz) | Proletario y Parásito"`
+
+---
+
+### TitleWithoutGuestRegex
+
+Matches episode titles without guests.
+
+```csharp
+private static readonly Regex TitleWithoutGuestRegex = new(
+    @$"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase
+);
+```
+
+#### Captures
+
+- `number` - Episode number (digits)
+- `title` - Episode title text
+
+#### Example Matches
+
+- ✅ `"42 - La Inteligencia Artificial | Proletario y Parásito"`
+- ✅ `"8 - Política Moderna | Proletario y Parásito"`
+
+---
+
+### SpecialWithNumberRegex
+
+Matches special episodes that have a number.
+
+```csharp
+private static readonly Regex SpecialWithNumberRegex = new(
+    @$"^ESPECIAL\s*#(?<number>\d+)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase
+);
+```
+
+#### Captures
+
+- `number` - Special episode number
+
+#### Example Matches
+
+- ✅ `"ESPECIAL #1 | Proletario y Parásito"`
+- ✅ `"Especial #5 | Proletario y Parásito"`
+
+---
+
+### ReferenceRegex
+
+Matches Simpsons episode references in descriptions.
+
+```csharp
+private static readonly Regex ReferenceRegex = new(
+    @"\[Episodio referencia:\s*(?<season>\d+)x(?<episode>\d+)\s*-\s*(?<title>.+?)\]",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase
+);
+```
+
+#### Captures
+
+- `season` - Simpsons season number
+- `episode` - Simpsons episode number within season
+- `title` - Simpsons episode title
+
+#### Example Matches
+
+- ✅ `"[Episodio referencia: 5x12 - Bart Gets Famous]"`
+- ✅ `"[Episodio referencia: 10x23 - Thirty Minutes Over Tokyo]"`
+
+---
+
+## Private Helper Methods
+
+### IsSpecialEpisode()
+
+Determines if an episode is special based on keywords.
+
+```csharp
+private static bool IsSpecialEpisode(string title)
+```
+
+<ParamField path="title" type="string" required>
+  Episode title to check for special episode keywords.
+</ParamField>
+
+<ResponseField name="Return Value" type="bool">
+  True if the title contains any special episode keyword, false otherwise.
+</ResponseField>
+
+#### Special Keywords
+
+```csharp
+private static readonly string[] SpecialWords = 
+    ["cachitos", "noticiario", "especial", "extra", "bonus"];
+```
+
+The check is case-insensitive.
+
+#### Implementation
+
+```csharp
+if (string.IsNullOrWhiteSpace(title))
+    return false;
+return SpecialWords.Any(word => title.Contains(word, StringComparison.OrdinalIgnoreCase));
+```
+
+---
+
+### ParseTitle()
+
+Extracts episode number, title, and guests from the raw title string.
+
+```csharp
+private static void ParseTitle(string rssItemTitle, EpisodeParseResults result)
+```
+
+<ParamField path="rssItemTitle" type="string" required>
+  Raw episode title from RSS feed.
+</ParamField>
+
+<ParamField path="result" type="EpisodeParseResults" required>
+  Results object to populate with extracted data.
+</ParamField>
+
+#### Process Flow
+
+Attempts to match patterns in order of specificity:
+
+1. **TrySpecialParse()** - Checks for "ESPECIAL #N" format
+2. **TryParseWithGuest()** - Checks for titles with guest information
+3. **TryParseWithoutGuest()** - Checks for regular titles without guests
+4. **Fallback** - Strips podcast name and marks as special
+
+#### Implementation
+
+```csharp
+if(string.IsNullOrWhiteSpace(rssItemTitle))
+    return;
+var trimmedTitle = rssItemTitle.Trim();
+
+if(TrySpecialParse(trimmedTitle, result))
+    return;
+if(TryParseWithGuest(trimmedTitle, result))
+    return;
+if(TryParseWithoutGuest(trimmedTitle, result))
+    return;
+
+result.IsSpecial = true;
+result.CleanedTitle = trimmedTitle
+    .Replace("| Proletario y Parásito", "", StringComparison.OrdinalIgnoreCase)
+    .Trim();
+```
+
+---
+
+### TrySpecialParse()
+
+Attempts to parse as a numbered special episode.
+
+```csharp
+private static bool TrySpecialParse(string trimmedTitle, EpisodeParseResults result)
+```
+
+#### Implementation
+
+```csharp
+var match = SpecialWithNumberRegex.Match(trimmedTitle);
+if (!match.Success) return false;
+result.EpisodeNumber = ParseEpisodeNumber(match.Groups["number"].Value);
+result.CleanedTitle = $"Especial #{match.Groups["number"].Value}";
+result.IsSpecial = true;
+return true;
+```
+
+---
+
+### TryParseWithGuest()
+
+Attempts to parse a title that includes guest information.
+
+```csharp
+private static bool TryParseWithGuest(string trimmedTitle, EpisodeParseResults result)
+```
+
+#### Implementation
+
+```csharp
+var match = TitleWithGuestRegex.Match(trimmedTitle);
+if (!match.Success) return false;
+result.EpisodeNumber = ParseEpisodeNumber(match.Groups["number"].Value);
+result.CleanedTitle = match.Groups["title"].Value.Trim();
+result.Guests = ParseGuests(match.Groups["guests"].Value);
+return true;
+```
+
+---
+
+### TryParseWithoutGuest()
+
+Attempts to parse a regular episode title without guests.
+
+```csharp
+private static bool TryParseWithoutGuest(string trimmedTitle, EpisodeParseResults result)
+```
+
+#### Implementation
+
+```csharp
+var match = TitleWithoutGuestRegex.Match(trimmedTitle);
+if (!match.Success) return false;
+result.EpisodeNumber = ParseEpisodeNumber(match.Groups["number"].Value);
+result.CleanedTitle = match.Groups["title"].Value.Trim();
+return true;
+```
+
+---
+
+### ParseEpisodeNumber()
+
+Converts string to nullable integer episode number.
+
+```csharp
+private static int? ParseEpisodeNumber(string value) =>
+    int.TryParse(value, out var number) ? number : null;
+```
+
+<ParamField path="value" type="string" required>
+  String representation of episode number.
+</ParamField>
+
+<ResponseField name="Return Value" type="int?">
+  Parsed integer or null if parsing fails.
+</ResponseField>
+
+---
+
+### ParseGuests()
+
+Extracts individual guest names from a guest string.
+
+```csharp
+private static List<string> ParseGuests(string guestsText)
+```
+
+<ParamField path="guestsText" type="string" required>
+  Guest names string that may contain commas and "y" (and) conjunctions.
+</ParamField>
+
+<ResponseField name="Return Value" type="List<string>">
+  List of individual guest names, trimmed and filtered.
+</ResponseField>
+
+#### Parsing Logic
+
+Handles multiple separation patterns:
+
+1. Splits on commas (`,`)
+2. Splits each part on ` y ` (Spanish "and")
+3. Trims whitespace from each name
+4. Filters out empty strings
+
+#### Implementation
+
+```csharp
+if (string.IsNullOrWhiteSpace(guestsText))
+    return [];
+
+return guestsText
+    .Split(',')
+    .SelectMany(part => part.Split([" y "], StringSplitOptions.None))
+    .Select(name => name.Trim())
+    .Where(name => !string.IsNullOrEmpty(name))
+    .ToList();
+```
+
+#### Examples
+
+| Input | Output |
+|-------|--------|
+| `"Juan Perez"` | `["Juan Perez"]` |
+| `"Ana Lopez y Carlos Ruiz"` | `["Ana Lopez", "Carlos Ruiz"]` |
+| `"Maria Garcia, Pedro Sanchez y Luis Martinez"` | `["Maria Garcia", "Pedro Sanchez", "Luis Martinez"]` |
+
+---
+
+### ParseDescription()
+
+Extracts Simpsons episode reference from description text.
+
+```csharp
+private static void ParseDescription(string descriptionText, EpisodeParseResults result)
+```
+
+<ParamField path="descriptionText" type="string" required>
+  Episode description text that may contain a Simpsons reference.
+</ParamField>
+
+<ParamField path="result" type="EpisodeParseResults" required>
+  Results object to populate with Simpsons data.
+</ParamField>
+
+#### Implementation
+
+```csharp
+if (string.IsNullOrWhiteSpace(descriptionText))
+    return;
+
+var match = ReferenceRegex.Match(descriptionText);
+if (match.Success)
+{
+    result.SimpsonsSeason = int.Parse(match.Groups["season"].Value);
+    result.SimpsonsEpisode = int.Parse(match.Groups["episode"].Value);
+    result.SimpsonsEpisodeTitle = match.Groups["title"].Value.Trim();
+}
+```
+
+<Note>
+  Only the first Simpsons reference in the description is captured if multiple exist.
+</Note>
+
+---
+
+## Dependencies
+
+```csharp
+using System.Text.RegularExpressions;
+using ProletarioParasitoPodcastParser.Models;
+```
+
+- All regex patterns are compiled for performance
+- All pattern matching is case-insensitive

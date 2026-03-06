@@ -1,0 +1,172 @@
+---
+title: Installation
+description: Set up the Proletario Parásito Podcast Parser on your system
+---
+
+## Prerequisites
+
+Before installing the parser, ensure you have the following:
+
+<Steps>
+  <Step title=".NET 8 SDK">
+    The parser requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8) to build and run.
+    
+    <Info>
+      .NET 8 is a Long-Term Support (LTS) release, supported until November 2026.
+    </Info>
+  </Step>
+  
+  <Step title="Internet Connection">
+    An active internet connection is required to:
+    - Fetch the podcast RSS feed from `https://anchor.fm/s/fae337f8/podcast/rss`
+    - Download .NET packages during the initial build (if not already cached)
+  </Step>
+</Steps>
+
+## System Requirements
+
+<CardGroup cols={2}>
+  <Card title="Operating System" icon="desktop">
+    - Windows 10/11 (x64, ARM64)
+    - macOS 12+ (x64, ARM64)
+    - Linux (most distributions)
+  </Card>
+  
+  <Card title="Runtime" icon="gear">
+    - .NET 8.0 or later
+    - Console with UTF-8 support for proper output rendering
+  </Card>
+</CardGroup>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Install .NET 8 SDK">
+    Download and install the .NET 8 SDK from the official Microsoft website:
+    
+    **[Download .NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)**
+    
+    <Note>
+      Choose the installer appropriate for your operating system and architecture.
+    </Note>
+  </Step>
+  
+  <Step title="Verify .NET Installation">
+    Open a terminal or command prompt and verify the installation:
+    
+    ```bash
+    dotnet --version
+    ```
+    
+    You should see output like:
+    
+    ```
+    8.0.xxx
+    ```
+    
+    <Warning>
+      If the command is not recognized, you may need to restart your terminal or add the .NET SDK to your system PATH.
+    </Warning>
+  </Step>
+  
+  <Step title="Clone the Repository">
+    Clone the parser repository from GitHub:
+    
+    ```bash
+    git clone https://github.com/xabierfj/ProletarioParasitoPodcastParser.git
+    ```
+    
+    Then navigate into the project directory:
+    
+    ```bash
+    cd ProletarioParasitoPodcastParser
+    ```
+  </Step>
+  
+  <Step title="Restore Dependencies">
+    The project has no external dependencies beyond the .NET 8 standard library, but you can explicitly restore to verify the project setup:
+    
+    ```bash
+    dotnet restore
+    ```
+    
+    <Info>
+      This step is optional as `dotnet run` will automatically restore dependencies.
+    </Info>
+  </Step>
+  
+  <Step title="Build the Project">
+    Build the project to ensure everything is set up correctly:
+    
+    ```bash
+    dotnet build
+    ```
+    
+    You should see output indicating a successful build:
+    
+    ```
+    Build succeeded.
+        0 Warning(s)
+        0 Error(s)
+    ```
+  </Step>
+</Steps>
+
+## Verification
+
+To verify the installation is complete and working, run the parser:
+
+```bash
+dotnet run
+```
+
+You should see output similar to:
+
+```
+[INFO] Fetching RSS feed from https://anchor.fm/s/fae337f8/podcast/rss
+[INFO] Fetched 142 RSS feeds
+
+=== PARSE RESULTS SUMMARY ===
+
+    Total Episodes: 142
+    With Guests: 38
+    Special Episodes: 21
+```
+
+<Note>
+  Episode counts will vary depending on the current state of the podcast feed.
+</Note>
+
+If you see this output, congratulations! The parser is installed and working correctly.
+
+## Troubleshooting
+
+### .NET SDK Not Found
+
+If you get an error that `dotnet` is not recognized:
+
+1. Verify the SDK is installed by checking your system's installed programs
+2. Restart your terminal to refresh environment variables
+3. Manually add the .NET SDK to your system PATH
+
+### Build Errors
+
+If you encounter build errors:
+
+1. Ensure you're using .NET 8 or later (`dotnet --version`)
+2. Try cleaning the build: `dotnet clean`
+3. Delete the `bin` and `obj` folders and rebuild
+
+### Network Errors
+
+If the RSS feed cannot be fetched:
+
+1. Verify your internet connection
+2. Check if the RSS feed URL is accessible in a web browser
+3. Ensure no firewall or proxy is blocking the connection
+
+## Next Steps
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Follow the quick start guide to learn how to use the parser effectively
+</Card>

@@ -1,0 +1,347 @@
+---
+title: 'Parsing Logic'
+description: 'Deep dive into the episode parsing patterns and extraction logic'
+icon: 'magnifying-glass-chart'
+---
+
+## Overview
+
+The `EpisodeParserService` uses compiled regular expressions to extract structured metadata from episode titles and descriptions. The parser handles multiple title formats and extracts Simpsons episode references embedded in descriptions.
+
+## Title Parsing Patterns
+
+The parser recognizes three distinct title patterns:
+
+| Pattern | Example |
+|---------|----------|
+| Numbered episode with guest | `42 - El capitalismo (con Juan Garcia) \| Proletario y Parásito` |
+| Numbered episode without guest | `42 - El capitalismo \| Proletario y Parásito` |
+| Numbered special | `ESPECIAL #5 \| Proletario y Parásito` |
+
+## Regular Expression Patterns
+
+The service defines four compiled regex patterns:
+
+### Pattern 1: Title with Guest
+
+```csharp
+private static readonly Regex TitleWithGuestRegex = new(@$"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*\(con\s+(?<guests>.+?)\)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+```
+
+**Captures:**
+- `number`: Episode number
+- `title`: Episode title (without suffix)
+- `guests`: Guest names (comma or "y" separated)
+
+### Pattern 2: Title without Guest
+
+```csharp
+private static readonly Regex TitleWithoutGuestRegex = new(@$"^(?<number>\d+)\s*-\s*(?<title>.+?)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+```
+
+**Captures:**
+- `number`: Episode number
+- `title`: Episode title (without suffix)
+
+### Pattern 3: Special with Number
+
+```csharp
+private static readonly Regex SpecialWithNumberRegex = new(@$"^ESPECIAL\s*#(?<number>\d+)\s*{PodcastSuffix}",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+```
+
+**Captures:**
+- `number`: Special episode number
+
+### Pattern 4: Simpsons Reference
+
+```csharp
+private static readonly Regex ReferenceRegex = new(@"\[Episodio referencia:\s*(?<season>\d+)x(?<episode>\d+)\s*-\s*(?<title>.+?)\]",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+```
+
+**Captures:**
+- `season`: Simpsons season number
+- `episode`: Simpsons episode number
+- `title`: Simpsons episode title
+
+<Info>
+All regex patterns use `RegexOptions.Compiled` for better performance when processing large episode lists.
+</Info>
+
+## Podcast Suffix
+
+All title patterns share a common suffix that must be stripped:
+
+```csharp
+private const string PodcastSuffix = @"\|\s*Proletario y Parásito";
+```
+
+This ensures the cleaned title doesn't include the podcast name.
+
+## Guest Name Extraction
+
+When a title matches the "with guest" pattern, the parser extracts and separates guest names:
+
+```csharp
+private static List<string> ParseGuests(string guestsText)
+{
+    if (string.IsNullOrWhiteSpace(guestsText))
+        return [];
+
+    return guestsText
+        .Split(',')
+        .SelectMany(part => part.Split([" y "], StringSplitOptions.None))
+        .Select(name => name.Trim())
+        .Where(name => !string.IsNullOrEmpty(name))
+        .ToList();
+}
+```
+
+<Steps>
+  <Step title="Split by Comma">
+    First, the guest string is split on commas to handle multiple guests: `"Juan, María"` → `["Juan", " María"]`
+  </Step>
+  
+  <Step title="Split by 'y'">
+    Each part is then split on " y " (Spanish for "and") to handle: `"Juan y María"` → `["Juan", "María"]`
+  </Step>
+  
+  <Step title="Trim and Filter">
+    Finally, each name is trimmed and empty strings are removed.
+  </Step>
+</Steps>
+
+**Example transformations:**
+- `"Juan Garcia"` → `["Juan Garcia"]`
+- `"Juan Garcia, María López"` → `["Juan Garcia", "María López"]`
+- `"Juan Garcia y María López"` → `["Juan Garcia", "María López"]`
+- `"Juan, María y Carlos"` → `["Juan", "María", "Carlos"]`
+
+## Special Episode Detection
+
+Episodes are marked as "special" in two ways:
+
+### 1. Pattern-Based Detection
+
+If the title matches the `SpecialWithNumberRegex` pattern:
+
+```csharp
+private static bool TrySpecialParse(string trimmedTitle, EpisodeParseResults result)
+{
+    var match = SpecialWithNumberRegex.Match(trimmedTitle);
+    if (!match.Success) return false;
+    result.EpisodeNumber = ParseEpisodeNumber(match.Groups["number"].Value);
+    result.CleanedTitle = $"Especial #{match.Groups["number"].Value}";
+    result.IsSpecial = true;
+    return true;
+}
+```
+
+### 2. Keyword Detection
+
+Episodes containing specific keywords are flagged as specials:
+
+```csharp
+private static readonly string[] SpecialWords = ["cachitos", "noticiario", "especial", "extra", "bonus"];
+
+private static bool IsSpecialEpisode(string title)
+{
+    if (string.IsNullOrWhiteSpace(title))
+        return false;
+    return SpecialWords.Any(word => title.Contains(word, StringComparison.OrdinalIgnoreCase));
+}
+```
+
+<Note>
+The keyword check is case-insensitive, so "ESPECIAL", "Especial", and "especial" are all recognized.
+</Note>
+
+## Title Parsing Workflow
+
+The parser attempts to match patterns in a specific order:
+
+```csharp
+private static void ParseTitle(string rssItemTitle, EpisodeParseResults result)
+{
+    if(string.IsNullOrWhiteSpace(rssItemTitle))
+        return;
+    var trimmedTitle = rssItemTitle.Trim();
+    
+    if(TrySpecialParse(trimmedTitle, result))
+        return;
+    if(TryParseWithGuest(trimmedTitle, result))
+        return;
+    if(TryParseWithoutGuest(trimmedTitle, result))
+        return;
+
+    result.IsSpecial = true;
+    result.CleanedTitle = trimmedTitle
+        .Replace("| Proletario y Parásito", "", StringComparison.OrdinalIgnoreCase)
+        .Trim();
+}
+```
+
+<Steps>
+  <Step title="Try Special Pattern">
+    First, check if the title matches the `ESPECIAL #N` pattern.
+  </Step>
+  
+  <Step title="Try With Guest">
+    If not, check if it matches the numbered episode with guest pattern.
+  </Step>
+  
+  <Step title="Try Without Guest">
+    If not, check if it matches the numbered episode without guest pattern.
+  </Step>
+  
+  <Step title="Fallback">
+    If none match, mark as special and do a simple suffix removal.
+  </Step>
+</Steps>
+
+<Info>
+The order matters: more specific patterns are checked first to avoid false matches.
+</Info>
+
+## Description Parsing
+
+The parser extracts Simpsons episode references from episode descriptions:
+
+```csharp
+private static void ParseDescription(string descriptionText, EpisodeParseResults result)
+{
+    if (string.IsNullOrWhiteSpace(descriptionText))
+        return;
+
+    var match = ReferenceRegex.Match(descriptionText);
+    if (match.Success)
+    {
+        result.SimpsonsSeason = int.Parse(match.Groups["season"].Value);
+        result.SimpsonsEpisode = int.Parse(match.Groups["episode"].Value);
+        result.SimpsonsEpisodeTitle = match.Groups["title"].Value.Trim();
+    }
+}
+```
+
+**Example description text:**
+```
+[Episodio referencia: 12x5 - Homer the Great]
+```
+
+**Extracted values:**
+- `SimpsonsSeason`: 12
+- `SimpsonsEpisode`: 5
+- `SimpsonsEpisodeTitle`: "Homer the Great"
+
+## HTML Cleaning
+
+Before parsing descriptions, the `RssFeedService` cleans HTML content:
+
+```csharp
+private string CleanHtml(string? html)
+{
+    if (string.IsNullOrEmpty(html))
+        return string.Empty;
+
+    html = html.Replace("<![CDATA[", "").Replace("]]>", ""); // Remove CDATA tags if present;
+    var cleanedText = Regex.Replace(html, "<.*?>", string.Empty);
+    cleanedText = System.Net.WebUtility.HtmlDecode(cleanedText);
+    cleanedText = Regex.Replace(cleanedText, @"\s+", " ").Trim();
+    return cleanedText;
+}
+```
+
+<Steps>
+  <Step title="Remove CDATA">
+    Strip CDATA wrapper tags that may appear in RSS descriptions.
+  </Step>
+  
+  <Step title="Strip HTML Tags">
+    Remove all HTML tags using a regex pattern `<.*?>`.
+  </Step>
+  
+  <Step title="Decode Entities">
+    Convert HTML entities like `&amp;` to their character equivalents.
+  </Step>
+  
+  <Step title="Normalize Whitespace">
+    Replace multiple whitespace characters with a single space and trim.
+  </Step>
+</Steps>
+
+## Duration Conversion
+
+The service converts iTunes duration strings to seconds:
+
+```csharp
+private int ConvertToSeconds(string episodeDuration)
+{
+    if (string.IsNullOrEmpty(episodeDuration))
+        return 0;
+
+    if (TimeSpan.TryParse(episodeDuration.Trim(), out var timeSpan))
+        return (int)timeSpan.TotalSeconds;
+
+    // Fallback: single plain-seconds value (e.g. "90")
+    if (int.TryParse(episodeDuration.Trim(), out var seconds) && seconds >= 0)
+        return seconds;
+
+    Console.WriteLine($"[ERROR] ConvertToSeconds: Could not parse duration '{episodeDuration}'");
+    return 0; // Default to 0 if parsing fails
+}
+```
+
+**Supported formats:**
+- `"01:23:45"` (HH:MM:SS) → 5025 seconds
+- `"23:45"` (MM:SS) → 1425 seconds
+- `"90"` (plain seconds) → 90 seconds
+
+<Note>
+The converter first attempts to parse as a `TimeSpan`, then falls back to parsing as an integer representing seconds.
+</Note>
+
+## Complete Parsing Flow
+
+The complete parsing process from `RssEpisodeItem` to `EpisodeParseResults`:
+
+```csharp
+public EpisodeParseResults ParseEpisode(RssEpisodeItem rssItem)
+{
+    var result = new EpisodeParseResults
+    {
+        OriginalTitle = rssItem.Title,
+        Description = rssItem.DescriptionText,
+        PublicationDate = rssItem.PublicationDate,
+        DurationSeconds = rssItem.DurationInSeconds,
+        SpotifyUrl = rssItem.SpotifyUrl,
+        AudioUrl = rssItem.AudioUrl,
+        ImageUrl = rssItem.ImageUrl
+    };
+
+    ParseTitle(rssItem.Title, result);
+    result.IsSpecial = result.IsSpecial || IsSpecialEpisode(rssItem.Title);
+    ParseDescription(rssItem.DescriptionText, result);
+    return result;
+}
+```
+
+<Steps>
+  <Step title="Initialize Result">
+    Copy basic fields from the RSS item to the parse result.
+  </Step>
+  
+  <Step title="Parse Title">
+    Apply regex patterns to extract episode number, title, and guests.
+  </Step>
+  
+  <Step title="Check Special Keywords">
+    Perform keyword-based special episode detection.
+  </Step>
+  
+  <Step title="Parse Description">
+    Extract Simpsons episode reference if present.
+  </Step>
+</Steps>

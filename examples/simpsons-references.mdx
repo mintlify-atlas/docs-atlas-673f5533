@@ -1,0 +1,155 @@
+---
+title: Simpsons References
+description: Extracting Simpsons episode references from podcast descriptions
+icon: tv
+---
+
+The *Proletario y Parásito* podcast often references specific episodes of *The Simpsons*. The parser extracts these references from episode descriptions using a specialized regex pattern.
+
+## Reference Format
+
+Simpsons episode references appear in episode descriptions using this format:
+
+```text
+[Episodio referencia: {season}x{episode} - {title}]
+```
+
+### Real Example
+
+```text
+[Episodio referencia: 7x21 - 22 Short Films About Springfield]
+```
+
+**Parsed Output:**
+- Simpsons Season: `7`
+- Simpsons Episode: `21`
+- Simpsons Episode Title: `22 Short Films About Springfield`
+
+<Note>
+The parser uses the `SxE` format (e.g., `7x21`) which is a common convention for denoting TV episode numbers: Season × Episode.
+</Note>
+
+## Regex Pattern
+
+The reference extraction uses a compiled regex pattern:
+
+```csharp
+private static readonly Regex ReferenceRegex = new(
+    @"\[Episodio referencia:\s*(?<season>\d+)x(?<episode>\d+)\s*-\s*(?<title>.+?)\]",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase
+);
+```
+
+### Pattern Breakdown
+
+<Accordion title="Pattern Components">
+  | Component | Description |
+  |-----------|-------------|
+  | `\[Episodio referencia:` | Literal opening bracket and label |
+  | `\s*` | Optional whitespace |
+  | `(?<season>\d+)` | Season number (one or more digits) |
+  | `x` | Literal separator |
+  | `(?<episode>\d+)` | Episode number (one or more digits) |
+  | `\s*-\s*` | Separator with optional whitespace |
+  | `(?<title>.+?)` | Episode title (non-greedy match) |
+  | `\]` | Literal closing bracket |
+</Accordion>
+
+## Extraction Logic
+
+The parser searches episode descriptions for the Simpsons reference pattern:
+
+```csharp
+private static void ParseDescription(string descriptionText, EpisodeParseResults result)
+{
+    if (string.IsNullOrWhiteSpace(descriptionText))
+        return;
+
+    var match = ReferenceRegex.Match(descriptionText);
+    if (match.Success)
+    {
+        result.SimpsonsSeason = int.Parse(match.Groups["season"].Value);
+        result.SimpsonsEpisode = int.Parse(match.Groups["episode"].Value);
+        result.SimpsonsEpisodeTitle = match.Groups["title"].Value.Trim();
+    }
+}
+```
+
+<Info>
+This code is located in `EpisodeParserService.cs:115-127`
+</Info>
+
+## Complete Example
+
+Here's a full example of how a podcast episode with a Simpsons reference is parsed:
+
+### Input
+
+**Episode Title:**
+```text
+15 - Análisis político | Proletario y Parásito
+```
+
+**Episode Description:**
+```text
+En este episodio discutimos las estructuras políticas modernas.
+[Episodio referencia: 7x21 - 22 Short Films About Springfield]
+No olvides suscribirte al podcast.
+```
+
+### Parsed Output
+
+```csharp
+EpisodeParseResults
+{
+    EpisodeNumber = 15,
+    CleanedTitle = "Análisis político",
+    SimpsonsSeason = 7,
+    SimpsonsEpisode = 21,
+    SimpsonsEpisodeTitle = "22 Short Films About Springfield",
+    Description = "En este episodio discutimos..."
+}
+```
+
+## Data Model
+
+The extracted Simpsons reference is stored in three properties of the `EpisodeParseResults` model:
+
+<CardGroup cols={3}>
+  <Card title="SimpsonsSeason" icon="calendar">
+    Integer representing the season number
+  </Card>
+  <Card title="SimpsonsEpisode" icon="hashtag">
+    Integer representing the episode number within the season
+  </Card>
+  <Card title="SimpsonsEpisodeTitle" icon="heading">
+    String containing the episode title
+  </Card>
+</CardGroup>
+
+## No Reference Found
+
+If an episode description doesn't contain a Simpsons reference, these properties remain `null` (for nullable integers) or empty:
+
+```csharp
+EpisodeParseResults
+{
+    EpisodeNumber = 42,
+    CleanedTitle = "Tema del día",
+    SimpsonsSeason = null,        // No reference found
+    SimpsonsEpisode = null,       // No reference found
+    SimpsonsEpisodeTitle = null   // No reference found
+}
+```
+
+<Note>
+The reference pattern is case-insensitive thanks to `RegexOptions.IgnoreCase`, so it will match variations like `[EPISODIO REFERENCIA: ...]` or `[episodio referencia: ...]`.
+</Note>
+
+## HTML Handling
+
+Before parsing, episode descriptions have HTML tags stripped and HTML entities decoded. This ensures the regex pattern can match references embedded in rich text descriptions.
+
+<Info>
+The RSS feed may contain descriptions with HTML formatting. The `RssEpisodeItem` model handles this by providing a `DescriptionText` property with cleaned content.
+</Info>

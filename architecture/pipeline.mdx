@@ -1,0 +1,227 @@
+---
+title: 'Data Pipeline'
+description: 'Learn how data flows through the parsing pipeline from RSS feed to console output'
+icon: 'diagram-project'
+---
+
+## Linear Pipeline Architecture
+
+The Proletario Parásito Podcast Parser implements a straightforward linear pipeline that processes RSS feed data through three distinct stages:
+
+```
+RSS Feed URL → RssFeedService → EpisodeParserService → ConsoleOutputService
+```
+
+Each stage transforms the data and passes it to the next stage until the final output is rendered to the console.
+
+## Pipeline Composition
+
+The pipeline is composed in `Program.cs`, which serves as the entry point and composition root:
+
+```csharp
+using ProletarioParasitoPodcastParser.Models;
+using ProletarioParasitoPodcastParser.Services;
+
+namespace ProletarioParasitoPodcastParser;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        
+        var httpClient = new HttpClient();
+        var rssFeedService = new RssFeedService(httpClient);
+        var parserService = new EpisodeParserService();
+        var outputService = new ConsoleOutputService();
+
+        try
+        {
+            var rssEpisodes = await rssFeedService.GetEpisodesAsync();
+            var allParsed = rssEpisodes.Select(e => parserService.ParseEpisode(e)).ToList();
+            
+            outputService.ShowSumary(allParsed);
+        } 
+        catch (Exception ex)
+        {
+            outputService.ShowError(ex);
+        }
+    }
+}
+```
+
+<Note>
+The encoding is set to UTF-8 to properly display special characters in podcast titles and descriptions.
+</Note>
+
+## Pipeline Stages
+
+<Steps>
+  <Step title="Stage 1: RSS Feed Fetching">
+    The `RssFeedService` retrieves the XML feed over HTTP and deserializes it into a list of `RssEpisodeItem` objects.
+    
+    **Input:** RSS feed URL (hardcoded)
+    
+    **Output:** `List<RssEpisodeItem>`
+    
+    **Operations:**
+    - HTTP GET request to Anchor.fm RSS endpoint
+    - XML parsing with XDocument
+    - iTunes namespace extraction
+    - HTML cleaning and entity decoding
+    - Duration conversion
+  </Step>
+  
+  <Step title="Stage 2: Episode Parsing">
+    The `EpisodeParserService` applies pattern matching to extract structured metadata from each episode.
+    
+    **Input:** `RssEpisodeItem` (raw RSS data)
+    
+    **Output:** `EpisodeParseResults` (structured episode data)
+    
+    **Operations:**
+    - Title pattern matching (3 regex patterns)
+    - Episode number extraction
+    - Guest name parsing
+    - Special episode detection
+    - Simpsons reference extraction
+  </Step>
+  
+  <Step title="Stage 3: Console Output">
+    The `ConsoleOutputService` formats and displays the parsed results with color-coded output.
+    
+    **Input:** `List<EpisodeParseResults>`
+    
+    **Output:** Console summary
+    
+    **Operations:**
+    - Calculate statistics (total, with guests, specials)
+    - Apply color formatting
+    - Render to console
+  </Step>
+</Steps>
+
+## Data Transformation
+
+As data flows through the pipeline, it undergoes several transformations:
+
+### Raw RSS XML → RssEpisodeItem
+
+The `RssFeedService` maps XML elements to strongly-typed objects:
+
+```csharp
+var episode = new RssEpisodeItem
+{
+    Title = item.Element("title")?.Value ?? string.Empty,
+    DescriptionHtml = item.Element("description")?.Value ?? string.Empty,
+    DescriptionText = CleanHtml(item.Element("description")?.Value ?? string.Empty),
+    SpotifyUrl = item.Element("link")?.Value ?? string.Empty,
+    Guid = item.Element("guid")?.Value ?? string.Empty,
+    PublicationDate = DateTime.TryParse(item.Element("pubDate")?.Value, out var pubDate) ? pubDate : DateTime.MinValue,
+    AudioUrl = item.Element("enclosure")?.Attribute("url")?.Value ?? string.Empty,
+    AudioSizeBytes = long.Parse(item.Element("enclosure")?.Attribute("length")?.Value ?? "0"),
+    Duration = item.Element(itunesNs + "duration")?.Value ?? string.Empty,
+    ImageUrl = item.Element(itunesNs + "image")?.Attribute("href")?.Value ?? string.Empty
+};
+episode.DurationInSeconds = ConvertToSeconds(episode.Duration);
+```
+
+### RssEpisodeItem → EpisodeParseResults
+
+The `EpisodeParserService` extracts structured metadata:
+
+```csharp
+public EpisodeParseResults ParseEpisode(RssEpisodeItem rssItem)
+{
+    var result = new EpisodeParseResults
+    {
+        OriginalTitle = rssItem.Title,
+        Description = rssItem.DescriptionText,
+        PublicationDate = rssItem.PublicationDate,
+        DurationSeconds = rssItem.DurationInSeconds,
+        SpotifyUrl = rssItem.SpotifyUrl,
+        AudioUrl = rssItem.AudioUrl,
+        ImageUrl = rssItem.ImageUrl
+    };
+
+    ParseTitle(rssItem.Title, result);
+    result.IsSpecial = result.IsSpecial || IsSpecialEpisode(rssItem.Title);
+    ParseDescription(rssItem.DescriptionText, result);
+    return result;
+}
+```
+
+### EpisodeParseResults → Console Output
+
+The `ConsoleOutputService` calculates statistics and formats the display:
+
+```csharp
+public void ShowSumary(List<EpisodeParseResults> episodes)
+{
+    if (episodes.Count == 0)
+    {
+         WriteColoured("No episodes found.", ConsoleColor.DarkYellow); return;
+    }
+    
+    var withGuests = episodes.Count(e => e.Guests.Any());
+    var specials = episodes.Count(e => e.IsSpecial);
+    
+    Console.WriteLine("=== PARSE RESULTS SUMMARY ===\n");
+    Console.WriteLine($"\tTotal Episodes: {episodes.Count}");
+    WriteColoured($"\tWith Guests: {withGuests}", ConsoleColor.Yellow);
+    WriteColoured($"\tSpecial Episodes: {specials}", ConsoleColor.Magenta);
+    Console.WriteLine();
+}
+```
+
+## Error Handling
+
+The pipeline includes error handling at the top level:
+
+```csharp
+try
+{
+    var rssEpisodes = await rssFeedService.GetEpisodesAsync();
+    var allParsed = rssEpisodes.Select(e => parserService.ParseEpisode(e)).ToList();
+    
+    outputService.ShowSumary(allParsed);
+} 
+catch (Exception ex)
+{
+    outputService.ShowError(ex);
+}
+```
+
+<Info>
+If any stage fails (network error, XML parsing error, etc.), the exception is caught and displayed to the user via the `ConsoleOutputService`.
+</Info>
+
+## Pipeline Execution Flow
+
+1. **Initialization**: Services are instantiated with their dependencies
+2. **Fetch**: RSS feed is downloaded and parsed into raw episode items
+3. **Transform**: Each raw item is mapped through the parser using LINQ's `Select`
+4. **Output**: The complete list of parsed results is displayed as a summary
+
+<Note>
+The entire pipeline is asynchronous at the HTTP fetch stage, but parsing and output are synchronous operations that execute on the returned data.
+</Note>
+
+## Expected Output
+
+When the pipeline executes successfully, users see:
+
+```bash
+[INFO] Fetching RSS feed from https://anchor.fm/s/fae337f8/podcast/rss
+[INFO] Fetched 142 RSS feeds
+
+=== PARSE RESULTS SUMMARY ===
+
+    Total Episodes: 142
+    With Guests: 38
+    Special Episodes: 21
+```
+
+<Info>
+Episode counts vary depending on the current state of the RSS feed.
+</Info>

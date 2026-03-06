@@ -1,0 +1,122 @@
+---
+title: 'Architecture Overview'
+description: 'Understand the service-based architecture of the Proletario Parásito Podcast Parser'
+icon: 'sitemap'
+---
+
+## System Architecture
+
+The Proletario Parásito Podcast Parser follows a simple linear pipeline architecture with no external dependencies beyond the .NET 8 standard library. The application is composed of three core services that work together to fetch, parse, and display podcast episode data.
+
+```
+RSS Feed (HTTP) → RssFeedService → EpisodeParserService → ConsoleOutputService
+```
+
+## Component Responsibilities
+
+Each component in the system has a well-defined responsibility:
+
+| Component | Responsibility |
+|-----------|----------------|
+| `RssFeedService` | Downloads and deserializes RSS XML into `RssEpisodeItem` objects |
+| `EpisodeParserService` | Applies regex-based title parsing and description extraction |
+| `ConsoleOutputService` | Formats and renders the summary with console colors |
+| `EpisodeParseResults` | Holds all structured episode data, including computed properties |
+| `RssEpisodeItem` | Holds raw field values mapped directly from the RSS item element |
+
+## Service-Based Structure
+
+### RssFeedService
+
+The `RssFeedService` is responsible for fetching the RSS feed over HTTP and deserializing the XML data into structured objects. It handles:
+
+- HTTP communication with the RSS feed endpoint
+- XML parsing using `System.Xml.Linq.XDocument`
+- iTunes namespace extraction for podcast-specific metadata
+- HTML cleaning and entity decoding
+- Duration format conversion
+
+<Info>
+The service uses the hardcoded RSS feed URL: `https://anchor.fm/s/fae337f8/podcast/rss`
+</Info>
+
+### EpisodeParserService
+
+The `EpisodeParserService` applies pattern matching and extraction logic to transform raw episode data into structured results. It performs:
+
+- Title pattern matching using compiled regular expressions
+- Episode number extraction
+- Guest name parsing (comma and "y" separated lists)
+- Special episode detection
+- Simpsons episode reference extraction from descriptions
+
+### ConsoleOutputService
+
+The `ConsoleOutputService` handles all user-facing output, including:
+
+- Color-coded summary display
+- Episode statistics (total, with guests, specials)
+- Error message formatting
+
+## Data Flow
+
+The data flows through the system in a linear, unidirectional manner:
+
+<Steps>
+  <Step title="RSS Feed Fetch">
+    The `RssFeedService` downloads the XML feed from the Anchor.fm endpoint and parses it into a list of `RssEpisodeItem` objects.
+  </Step>
+  
+  <Step title="Episode Parsing">
+    Each `RssEpisodeItem` is passed to the `EpisodeParserService`, which extracts structured metadata and returns an `EpisodeParseResults` object.
+  </Step>
+  
+  <Step title="Console Output">
+    The complete list of `EpisodeParseResults` is handed to the `ConsoleOutputService`, which renders a summary to the console.
+  </Step>
+</Steps>
+
+## No External Dependencies
+
+The application is intentionally designed to have no external dependencies beyond the .NET 8 SDK. All functionality is implemented using built-in .NET libraries:
+
+<CardGroup cols={2}>
+  <Card title="XML Parsing" icon="code">
+    `System.Xml.Linq` for RSS feed deserialization
+  </Card>
+  <Card title="Pattern Matching" icon="magnifying-glass">
+    `System.Text.RegularExpressions` for title parsing
+  </Card>
+  <Card title="HTTP Client" icon="cloud-arrow-down">
+    `System.Net.Http.HttpClient` for RSS fetching
+  </Card>
+  <Card title="HTML Utilities" icon="broom">
+    `System.Net.WebUtility` for HTML entity decoding
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+- **Language:** C# 12
+- **Framework:** .NET 8
+- **XML parsing:** `System.Xml.Linq` (XDocument)
+- **Pattern matching:** `System.Text.RegularExpressions` (compiled Regex)
+- **HTTP client:** `System.Net.Http.HttpClient`
+
+## Project Structure
+
+```
+ProletarioParasitoPodcastParser/
+├── Models/
+│   ├── RssEpisodeItem.cs        # Raw data mapped from RSS XML items
+│   └── EpisodeParseResults.cs   # Structured result after parsing
+├── Services/
+│   ├── RssFeedService.cs        # Fetches and deserializes the RSS feed
+│   ├── EpisodeParserService.cs  # Parses titles and descriptions
+│   └── ConsoleOutputService.cs  # Renders results to the console
+└── Program.cs                   # Entry point and composition root
+```
+
+<Note>
+The architecture prioritizes simplicity and maintainability. Each service has a single, well-defined responsibility, making the codebase easy to understand and extend.
+</Note>

@@ -1,0 +1,121 @@
+---
+title: 'Services Overview'
+description: 'Overview of all services in the Proletario Parásito Podcast Parser'
+---
+
+## Available Services
+
+The parser is organized into three main services, each with a specific responsibility:
+
+<CardGroup cols={1}>
+  <Card
+    title="RssFeedService"
+    icon="rss"
+    href="/api/rss-feed-service"
+  >
+    Fetches and parses the podcast RSS feed from Anchor.fm, handling XML parsing and data extraction.
+  </Card>
+
+  <Card
+    title="EpisodeParserService"
+    icon="magnifying-glass"
+    href="/api/episode-parser-service"
+  >
+    Extracts structured metadata from episode titles and descriptions using regex patterns.
+  </Card>
+
+  <Card
+    title="ConsoleOutputService"
+    icon="terminal"
+    href="/api/console-output-service"
+  >
+    Handles formatted console output with colored text for summaries and error messages.
+  </Card>
+</CardGroup>
+
+---
+
+## Service Architecture
+
+The services follow a clear separation of concerns:
+
+### Data Flow
+
+1. **RssFeedService** retrieves raw episode data from the RSS feed
+2. **EpisodeParserService** processes and structures the episode information
+3. **ConsoleOutputService** displays results to the user
+
+```csharp
+// Typical usage pattern
+var httpClient = new HttpClient();
+var rssFeedService = new RssFeedService(httpClient);
+var episodeParserService = new EpisodeParserService();
+var consoleOutputService = new ConsoleOutputService();
+
+// Fetch episodes
+var rssEpisodes = await rssFeedService.GetEpisodesAsync();
+
+// Parse episodes
+var parsedEpisodes = rssEpisodes
+    .Select(e => episodeParserService.ParseEpisode(e))
+    .ToList();
+
+// Display summary
+consoleOutputService.ShowSumary(parsedEpisodes);
+```
+
+---
+
+## Service Responsibilities
+
+### RssFeedService
+
+- Fetches XML data from the podcast RSS feed
+- Parses XML using LINQ to XML
+- Handles iTunes namespace elements
+- Converts duration formats to seconds
+- Cleans HTML from descriptions
+- Creates `RssEpisodeItem` objects
+
+### EpisodeParserService
+
+- Extracts episode numbers from titles
+- Identifies and parses guest names
+- Detects special episodes
+- Extracts Simpsons episode references from descriptions
+- Cleans and formats episode titles
+- Creates `EpisodeParseResults` objects
+
+### ConsoleOutputService
+
+- Displays episode parsing summaries
+- Shows error messages with stack traces
+- Uses colored output for different information types
+- Provides statistics (total episodes, episodes with guests, special episodes)
+
+---
+
+## Dependency Injection
+
+The services are designed to work with .NET's dependency injection:
+
+```csharp
+// In Program.cs or service configuration
+services.AddHttpClient<RssFeedService>();
+services.AddSingleton<EpisodeParserService>();
+services.AddSingleton<ConsoleOutputService>();
+```
+
+<Note>
+  **RssFeedService** uses primary constructor syntax and requires an `HttpClient` instance.
+</Note>
+
+---
+
+## Namespace
+
+All services are located in the `ProletarioParasitoPodcastParser.Services` namespace.
+
+```csharp
+using ProletarioParasitoPodcastParser.Services;
+```
